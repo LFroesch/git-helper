@@ -835,13 +835,6 @@ func (m model) handleCommitKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Enter or 'c' to focus custom input
-	if msg.String() == "enter" || msg.String() == "c" {
-		m.commitInput.Focus()
-		m.selectedSuggestion = -1
-		return m, nil
-	}
-
 	// Arrow keys to select suggestion
 	if msg.String() == "up" || msg.String() == "k" {
 		if m.selectedSuggestion > 0 {
@@ -856,15 +849,34 @@ func (m model) handleCommitKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Spacebar or enter on selected suggestion
-	if msg.String() == " " || (msg.String() == "enter" && m.selectedSuggestion > 0) {
-		if m.selectedSuggestion > 0 && m.selectedSuggestion <= len(m.suggestions) {
+	// Enter on selected suggestion - CHECK THIS FIRST before focusing input
+	if msg.String() == "enter" && m.selectedSuggestion > 0 {
+		if m.selectedSuggestion <= len(m.suggestions) {
 			suggestion := m.suggestions[m.selectedSuggestion-1]
 			return m, tea.Batch(
 				m.commitWithMessage(suggestion.Message),
 				m.refreshAfterCommit(),
 			)
 		}
+		return m, nil
+	}
+
+	// Spacebar on selected suggestion
+	if msg.String() == " " && m.selectedSuggestion > 0 {
+		if m.selectedSuggestion <= len(m.suggestions) {
+			suggestion := m.suggestions[m.selectedSuggestion-1]
+			return m, tea.Batch(
+				m.commitWithMessage(suggestion.Message),
+				m.refreshAfterCommit(),
+			)
+		}
+		return m, nil
+	}
+
+	// 'c' or Enter (when no suggestion selected) to focus custom input
+	if msg.String() == "c" || (msg.String() == "enter" && m.selectedSuggestion == 0) {
+		m.commitInput.Focus()
+		m.selectedSuggestion = -1
 		return m, nil
 	}
 
@@ -3588,7 +3600,7 @@ func (m model) renderFooter() string {
 		if m.commitInput.Focused() {
 			help = "enter=commit esc=cancel"
 		} else {
-			help = "1-9=use suggestion enter/c=custom input 1-4=tabs q=quit"
+			help = "1-9=instant commit ↑/↓=navigate enter/space=commit c=custom 1-4=tabs q=quit"
 		}
 	case "branches":
 		if m.branchInput.Focused() {
