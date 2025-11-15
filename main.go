@@ -666,15 +666,6 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Special case: In commit tab, keys 1-9 are for instant commits, NOT tab switching
-	// Let the commit handler process them first
-	if m.tab == "commit" && !m.commitInput.Focused() {
-		key := msg.String()
-		if key >= "1" && key <= "9" {
-			return m.handleCommitKeys(msg)
-		}
-	}
-
 	// Tab switching (1-4) - only when no input is focused
 	if !m.anyInputFocused() {
 		switch msg.String() {
@@ -869,19 +860,6 @@ func (m model) handleCommitKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.refreshAfterCommit(),
 				)
 			}
-		}
-		return m, nil
-	}
-
-	// Handle number keys for suggestions (1-9)
-	if msg.String() >= "1" && msg.String() <= "9" {
-		num, _ := strconv.Atoi(msg.String())
-		if num <= len(m.suggestions) {
-			suggestion := m.suggestions[num-1]
-			return m, tea.Batch(
-				m.commitWithMessage(suggestion.Message),
-				m.refreshAfterCommit(),
-			)
 		}
 		return m, nil
 	}
@@ -3672,7 +3650,7 @@ func (m model) renderFooter() string {
 		if m.commitInput.Focused() {
 			help = formatHelp("enter=commit", "esc=cancel")
 		} else {
-			help = formatHelp("1-9=instant commit", "↑/↓=navigate", "enter/space=commit", "c=custom", "1-4=tabs", "q=quit")
+			help = formatHelp("↑/↓=navigate", "enter/space=commit", "c=custom", "1-4=tabs", "q=quit")
 		}
 	case "branches":
 		if m.branchInput.Focused() {
