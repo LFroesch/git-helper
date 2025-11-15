@@ -806,7 +806,10 @@ func (m model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.gitReset(), m.refreshAfterStaging())
 	}
 
-	return m, nil
+	// Pass unhandled keys to the table for navigation
+	var cmd tea.Cmd
+	m.filesTable, cmd = m.filesTable.Update(msg)
+	return m, cmd
 }
 
 func (m model) handleConflictKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -839,7 +842,10 @@ func (m model) handleConflictKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	// Pass unhandled keys to the conflicts table for navigation
+	var cmd tea.Cmd
+	m.conflictsTable, cmd = m.conflictsTable.Update(msg)
+	return m, cmd
 }
 
 // ============================================================================
@@ -930,10 +936,11 @@ func (m model) handleBranchesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// If in comparison mode, handle that
+	// If in comparison mode, pass keys to comparison table for navigation
 	if m.branchComparison != nil {
-		// Navigation handled by table update
-		return m, nil
+		var cmd tea.Cmd
+		m.comparisonTable, cmd = m.comparisonTable.Update(msg)
+		return m, cmd
 	}
 
 	switch msg.String() {
@@ -996,7 +1003,10 @@ func (m model) handleBranchesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadBranches()
 	}
 
-	return m, nil
+	// Pass unhandled keys to the branches table for navigation
+	var cmd tea.Cmd
+	m.branchesTable, cmd = m.branchesTable.Update(msg)
+	return m, cmd
 }
 
 // ============================================================================
@@ -1039,7 +1049,10 @@ func (m model) handleToolsMenuKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	// Pass unhandled keys to the tools table for navigation
+	var cmd tea.Cmd
+	m.toolsTable, cmd = m.toolsTable.Update(msg)
+	return m, cmd
 }
 
 func (m model) handleUndoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1082,7 +1095,10 @@ func (m model) handleUndoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m, nil
+	// Pass unhandled keys to the undo table for navigation
+	var cmd tea.Cmd
+	m.undoTable, cmd = m.undoTable.Update(msg)
+	return m, cmd
 }
 
 func (m model) handleRebaseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1146,6 +1162,11 @@ func (m model) handleRebaseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+
+		// Pass unhandled keys to the rebase table for navigation
+		var cmd tea.Cmd
+		m.rebaseTable, cmd = m.rebaseTable.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -1166,7 +1187,11 @@ func (m model) handleHistoryKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	return m, nil
+
+	// Pass unhandled keys to the history table for navigation
+	var cmd tea.Cmd
+	m.historyTable, cmd = m.historyTable.Update(msg)
+	return m, cmd
 }
 
 func (m model) handleRemoteKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
