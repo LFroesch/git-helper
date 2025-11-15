@@ -78,8 +78,8 @@ type ConflictFile struct {
 }
 
 type Conflict struct {
-	LineStart    int
-	OursContent  []string
+	LineStart     int
+	OursContent   []string
 	TheirsContent []string
 }
 
@@ -103,53 +103,53 @@ type RebaseCommit struct {
 
 type model struct {
 	// State management - cleaner hierarchy
-	tab       string // "workspace", "commit", "branches", "tools"
-	toolMode  string // when tab="tools": "menu", "undo", "rebase", "history", "remote"
-	viewMode  string // workspace sub-states: "files", "diff", "conflicts"
+	tab      string // "workspace", "commit", "branches", "tools"
+	toolMode string // when tab="tools": "menu", "undo", "rebase", "history", "remote"
+	viewMode string // workspace sub-states: "files", "diff", "conflicts"
 
 	// Data
-	changes           []GitChange
-	suggestions       []CommitSuggestion
-	gitState          GitStatus
-	branches          []Branch
-	commits           []Commit
-	conflicts         []ConflictFile
-	branchComparison  *BranchComparison
-	rebaseCommits     []RebaseCommit
+	changes          []GitChange
+	suggestions      []CommitSuggestion
+	gitState         GitStatus
+	branches         []Branch
+	commits          []Commit
+	conflicts        []ConflictFile
+	branchComparison *BranchComparison
+	rebaseCommits    []RebaseCommit
 
 	// UI content
-	diffContent       string
-	pushOutput        string
-	recentCommits     []Commit // Last 3 for commit tab
+	diffContent   string
+	pushOutput    string
+	recentCommits []Commit // Last 3 for commit tab
 
 	// Tables
-	filesTable        table.Model
-	branchesTable     table.Model
-	toolsTable        table.Model
-	historyTable      table.Model
-	conflictsTable    table.Model
-	comparisonTable   table.Model
-	rebaseTable       table.Model
-	undoTable         table.Model
+	filesTable      table.Model
+	branchesTable   table.Model
+	toolsTable      table.Model
+	historyTable    table.Model
+	conflictsTable  table.Model
+	comparisonTable table.Model
+	rebaseTable     table.Model
+	undoTable       table.Model
 
 	// Inputs
-	commitInput       textinput.Model
-	branchInput       textinput.Model
-	rebaseInput       textinput.Model
+	commitInput textinput.Model
+	branchInput textinput.Model
+	rebaseInput textinput.Model
 
 	// UI state
-	width             int
-	height            int
-	statusMsg         string
-	statusExpiry      time.Time
-	showDiffPreview   bool
+	width              int
+	height             int
+	statusMsg          string
+	statusExpiry       time.Time
+	showDiffPreview    bool
 	selectedSuggestion int // 0 = custom, 1-9 = suggestions
 
 	// System
-	repoPath          string
-	lastCommit        string
-	lastStatusUpdate  time.Time
-	confirmAction     string
+	repoPath         string
+	lastCommit       string
+	lastStatusUpdate time.Time
+	confirmAction    string
 }
 
 // ============================================================================
@@ -178,44 +178,44 @@ type pushOutputMsg struct {
 
 var (
 	titleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("86")).
-		MarginLeft(2)
+			Bold(true).
+			Foreground(lipgloss.Color("86")).
+			MarginLeft(2)
 
 	tabStyle = lipgloss.NewStyle().
-		Padding(0, 2).
-		Foreground(lipgloss.Color("240"))
+			Padding(0, 2).
+			Foreground(lipgloss.Color("240"))
 
 	activeTabStyle = lipgloss.NewStyle().
-		Padding(0, 2).
-		Foreground(lipgloss.Color("86")).
-		Bold(true).
-		Underline(true)
+			Padding(0, 2).
+			Foreground(lipgloss.Color("86")).
+			Bold(true).
+			Underline(true)
 
 	suggestionStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
-		MarginLeft(2)
+			Foreground(lipgloss.Color("39")).
+			MarginLeft(2)
 
 	selectedSuggestionStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("46")).
-		Bold(true).
-		MarginLeft(2)
+				Foreground(lipgloss.Color("46")).
+				Bold(true).
+				MarginLeft(2)
 
 	helpStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		MarginLeft(2)
+			Foreground(lipgloss.Color("240")).
+			MarginLeft(2)
 
 	errorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("196")).
-		Bold(true)
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
 
 	successStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("46")).
-		Bold(true)
+			Foreground(lipgloss.Color("46")).
+			Bold(true)
 
 	warningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("226")).
-		Bold(true)
+			Foreground(lipgloss.Color("226")).
+			Bold(true)
 )
 
 // ============================================================================
@@ -804,12 +804,6 @@ func (m model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "R": // Reset (unstage all)
 		return m, tea.Batch(m.gitReset(), m.refreshAfterStaging())
-	}
-
-	// DEBUG: Log what key we're passing to table
-	if msg.String() == "up" || msg.String() == "down" {
-		m.statusMsg = fmt.Sprintf("DEBUG: Passing %s to filesTable", msg.String())
-		m.statusExpiry = time.Now().Add(1 * time.Second)
 	}
 
 	// Pass unhandled keys to the table for navigation
@@ -3271,7 +3265,7 @@ func (m model) View() string {
 
 func (m model) renderHeader() string {
 	// Title
-	title := titleStyle.Render("🚀 Git Helper - Redesigned")
+	title := titleStyle.Render("🚀 Git Helper")
 
 	// Repo info
 	repoInfo := lipgloss.NewStyle().
