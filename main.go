@@ -493,8 +493,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Only handle other keys if NOT in text input mode
-		if m.state != "custom" && m.state != "edit" && m.state != "newbranch" {
+		// Only handle other keys if NOT in text input mode (or if in custom but not focused)
+		if (m.state != "custom" && m.state != "edit" && m.state != "newbranch") ||
+		   (m.state == "custom" && !m.customInput.Focused()) {
 			switch msg.String() {
 			case "q", "ctrl+c":
 				if m.confirmAction != "" {
