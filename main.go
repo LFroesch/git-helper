@@ -971,18 +971,39 @@ func (m model) handleBranchesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.statusExpiry = time.Now().Add(3 * time.Second)
 					return m, nil
 				}
-				m.confirmAction = "delete-branch:" + branch.Name
-				m.statusMsg = fmt.Sprintf("⚠️ Press 'y' to confirm delete '%s', or ESC to cancel", branch.Name)
+				// Store both branch name and whether it's remote
+				if branch.IsRemote {
+					m.confirmAction = "delete-remote-branch:" + branch.Name
+					m.statusMsg = fmt.Sprintf("⚠️ Press 'y' to confirm delete REMOTE branch '%s', or ESC to cancel", branch.Name)
+				} else {
+					m.confirmAction = "delete-branch:" + branch.Name
+					m.statusMsg = fmt.Sprintf("⚠️ Press 'y' to confirm delete '%s', or ESC to cancel", branch.Name)
+				}
 				m.statusExpiry = time.Now().Add(10 * time.Second)
 			}
 		}
 		return m, nil
 
-	case "y": // Confirm delete
+	case "p": // Prune stale remote branches
+		m.confirmAction = "prune-remote"
+		m.statusMsg = "⚠️ Press 'y' to confirm pruning stale remote-tracking branches, or ESC to cancel"
+		m.statusExpiry = time.Now().Add(10 * time.Second)
+		return m, nil
+
+	case "y": // Confirm delete or prune
+		if strings.HasPrefix(m.confirmAction, "delete-remote-branch:") {
+			branchName := strings.TrimPrefix(m.confirmAction, "delete-remote-branch:")
+			m.confirmAction = ""
+			return m, m.deleteRemoteBranch(branchName)
+		}
 		if strings.HasPrefix(m.confirmAction, "delete-branch:") {
 			branchName := strings.TrimPrefix(m.confirmAction, "delete-branch:")
 			m.confirmAction = ""
 			return m, m.deleteBranch(branchName)
+		}
+		if m.confirmAction == "prune-remote" {
+			m.confirmAction = ""
+			return m, m.pruneRemoteBranches()
 		}
 		return m, nil
 
@@ -2695,6 +2716,60 @@ func (m model) deleteBranch(branchName string) tea.Cmd {
 	}
 }
 
+func (m model) deleteRemoteBranch(branchName string) tea.Cmd {
+	return func() tea.Msg {
+		// Extract remote and branch name from "origin/branch-name" format
+		parts := strings.SplitN(branchName, "/", 2)
+		if len(parts) != 2 {
+			return statusMsg{message: fmt.Sprintf("❌ Invalid remote branch format: %s", branchName)}
+		}
+
+		remote := parts[0]
+		remoteBranchName := parts[1]
+
+		// Delete remote branch using git push --delete
+		output, err := executeGitCommand(m.repoPath, "push", remote, "--delete", remoteBranchName)
+		if err != nil {
+			return statusMsg{message: fmt.Sprintf("❌ Failed to delete remote branch: %v - %s", err, string(output))}
+		}
+
+		return tea.Batch(
+			m.loadBranches(),
+			func() tea.Msg {
+				return statusMsg{message: fmt.Sprintf("✅ Deleted remote branch '%s'", branchName)}
+			},
+		)()
+	}
+}
+
+func (m model) pruneRemoteBranches() tea.Cmd {
+	return func() tea.Msg {
+		// Prune stale remote-tracking branches
+		output, err := executeGitCommand(m.repoPath, "remote", "prune", "origin")
+		if err != nil {
+			return statusMsg{message: fmt.Sprintf("❌ Failed to prune remote branches: %v - %s", err, string(output))}
+		}
+
+		// Parse output to see what was pruned
+		outputStr := string(output)
+		if strings.TrimSpace(outputStr) == "" || !strings.Contains(outputStr, "origin/") {
+			return tea.Batch(
+				m.loadBranches(),
+				func() tea.Msg {
+					return statusMsg{message: "✅ No stale remote-tracking branches to prune"}
+				},
+			)()
+		}
+
+		return tea.Batch(
+			m.loadBranches(),
+			func() tea.Msg {
+				return statusMsg{message: "✅ Pruned stale remote-tracking branches"}
+			},
+		)()
+	}
+}
+
 // ============================================================================
 // PUSH/PULL OPERATIONS
 // ============================================================================
@@ -3753,7 +3828,7 @@ func (m model) renderFooter() string {
 		} else if m.branchComparison != nil {
 			help = formatHelp("esc=back to branches", "1-4=tabs", "q=quit")
 		} else {
-			help = formatHelp("enter=switch (📡=remote)", "n=new", "d=delete", "c=compare", "f=fetch", "r=refresh", "1-4=tabs", "q=quit")
+			help = formatHelp("enter=switch (📡=remote)", "n=new", "d=delete (local/remote)", "p=prune", "c=compare", "f=fetch", "r=refresh", "1-4=tabs", "q=quit")
 		}
 	case "tools":
 		switch m.toolMode {

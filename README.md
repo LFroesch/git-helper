@@ -79,19 +79,21 @@ Complete branch management with comparison tools
 - View all branches (local and remote) with current indicator
 - See ahead/behind counts for each branch
 - Compare current branch with main/master
-- Create, switch, delete branches
+- Create, switch, delete branches (local AND remote)
 - Switch to remote branches (creates local tracking branch)
+- Prune stale remote-tracking branches
 - Remote branches marked with 📡 icon
 - Safe delete with confirmations
 
 **Shortcuts:**
 - `Enter` - Switch to selected branch (local or remote)
 - `n` - Create new branch
-- `d` - Delete branch (with confirmation)
+- `d` - Delete branch (local or remote, with confirmation)
+- `p` - Prune stale remote-tracking branches
 - `c` - Compare with main/master
 - `f` - Fetch from remote (sync remote branches)
 - `r` - Refresh branches
-- `y` - Confirm deletion
+- `y` - Confirm deletion/prune action
 
 **Branch Comparison:**
 Shows three sections when comparing:
@@ -199,6 +201,15 @@ Push/pull with detailed output:
 4. Press 'o' (ours), 't' (theirs), or 'b' (both)
 5. Repeat for all conflicts
 6. Press 'c' to continue merge
+```
+
+### Clean Up Branches
+```
+1. Tab 3 > Navigate to a branch
+2. Press 'd' to delete (works for both local and remote)
+3. Press 'y' to confirm
+4. Press 'p' to prune stale remote-tracking branches
+5. Keeps your branch list clean and organized
 ```
 
 ---
