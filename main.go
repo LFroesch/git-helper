@@ -2730,7 +2730,12 @@ func (m model) deleteRemoteBranch(branchName string) tea.Cmd {
 		// Delete remote branch using git push --delete
 		output, err := executeGitCommand(m.repoPath, "push", remote, "--delete", remoteBranchName)
 		if err != nil {
-			return statusMsg{message: fmt.Sprintf("❌ Failed to delete remote branch: %v - %s", err, string(output))}
+			outputStr := string(output)
+			// Check if branch doesn't exist on remote (stale branch)
+			if strings.Contains(outputStr, "does not exist") || strings.Contains(outputStr, "not found") {
+				return statusMsg{message: fmt.Sprintf("ℹ️ Branch '%s' already deleted on remote. Use 'p' to prune stale references.", branchName)}
+			}
+			return statusMsg{message: fmt.Sprintf("❌ Failed to delete remote branch: %v - %s", err, outputStr)}
 		}
 
 		return tea.Batch(
