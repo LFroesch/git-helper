@@ -976,8 +976,24 @@ func (m model) handleBranchesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.confirmAction = "delete-remote-branch:" + branch.Name
 					m.statusMsg = fmt.Sprintf("⚠️ Press 'y' to confirm delete REMOTE branch '%s', or ESC to cancel", branch.Name)
 				} else {
-					m.confirmAction = "delete-branch:" + branch.Name
-					m.statusMsg = fmt.Sprintf("⚠️ Press 'y' to confirm delete '%s', or ESC to cancel", branch.Name)
+					// Check if there's a corresponding remote branch
+					hasRemote := false
+
+					// Check if remote branch exists by running git ls-remote
+					cmd := exec.Command("git", "ls-remote", "--heads", "origin", branch.Name)
+					cmd.Dir = m.repoPath
+					output, err := cmd.Output()
+					if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+						hasRemote = true
+					}
+
+					if hasRemote {
+						m.confirmAction = "delete-branch:" + branch.Name
+						m.statusMsg = fmt.Sprintf("⚠️ Delete '%s': 'y'=local only, 'b'=both local+remote, ESC=cancel", branch.Name)
+					} else {
+						m.confirmAction = "delete-branch:" + branch.Name
+						m.statusMsg = fmt.Sprintf("⚠️ Press 'y' to confirm delete '%s', or ESC to cancel", branch.Name)
+					}
 				}
 				m.statusExpiry = time.Now().Add(10 * time.Second)
 			}
@@ -988,6 +1004,14 @@ func (m model) handleBranchesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirmAction = "prune-remote"
 		m.statusMsg = "⚠️ Press 'y' to confirm pruning stale remote-tracking branches, or ESC to cancel"
 		m.statusExpiry = time.Now().Add(10 * time.Second)
+		return m, nil
+
+	case "b": // Delete both local and remote branch
+		if strings.HasPrefix(m.confirmAction, "delete-branch:") {
+			branchName := strings.TrimPrefix(m.confirmAction, "delete-branch:")
+			m.confirmAction = ""
+			return m, m.deleteBranchBoth(branchName)
+		}
 		return m, nil
 
 	case "y": // Confirm delete or prune
@@ -2742,6 +2766,49 @@ func (m model) deleteRemoteBranch(branchName string) tea.Cmd {
 			m.loadBranches(),
 			func() tea.Msg {
 				return statusMsg{message: fmt.Sprintf("✅ Deleted remote branch '%s'", branchName)}
+			},
+		)()
+	}
+}
+
+func (m model) deleteBranchBoth(branchName string) tea.Cmd {
+	return func() tea.Msg {
+		// First delete the local branch
+		output, err := executeGitCommand(m.repoPath, "branch", "-d", branchName)
+		if err != nil {
+			output, err = executeGitCommand(m.repoPath, "branch", "-D", branchName)
+			if err != nil {
+				return statusMsg{message: fmt.Sprintf("❌ Failed to delete local branch: %v - %s", err, string(output))}
+			}
+		}
+
+		// Then delete the remote branch
+		output, err = executeGitCommand(m.repoPath, "push", "origin", "--delete", branchName)
+		if err != nil {
+			outputStr := string(output)
+			if strings.Contains(outputStr, "does not exist") || strings.Contains(outputStr, "not found") {
+				// Local deleted but remote doesn't exist
+				return tea.Batch(
+					m.loadBranches(),
+					func() tea.Msg {
+						return statusMsg{message: fmt.Sprintf("✅ Deleted local branch '%s' (remote already deleted)", branchName)}
+					},
+				)()
+			}
+			// Local deleted but remote failed
+			return tea.Batch(
+				m.loadBranches(),
+				func() tea.Msg {
+					return statusMsg{message: fmt.Sprintf("⚠️ Deleted local '%s' but failed to delete remote: %v", branchName, err)}
+				},
+			)()
+		}
+
+		// Both deleted successfully
+		return tea.Batch(
+			m.loadBranches(),
+			func() tea.Msg {
+				return statusMsg{message: fmt.Sprintf("✅ Deleted both local and remote branch '%s'", branchName)}
 			},
 		)()
 	}
