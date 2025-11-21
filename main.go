@@ -46,6 +46,7 @@ type GitStatus struct {
 type Branch struct {
 	Name      string
 	IsCurrent bool
+	IsRemote  bool
 	Upstream  string
 	Ahead     int
 	Behind    int
@@ -1244,22 +1245,26 @@ func (m model) loadGitStatus() tea.Cmd {
 
 func (m model) loadBranches() tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command("git", "branch", "-vv")
-		cmd.Dir = m.repoPath
-		output, err := cmd.Output()
+		// Load local branches with tracking info
+		cmdLocal := exec.Command("git", "branch", "-vv")
+		cmdLocal.Dir = m.repoPath
+		outputLocal, err := cmdLocal.Output()
 		if err != nil {
 			return statusMsg{message: fmt.Sprintf("❌ Failed to load branches: %v", err)}
 		}
 
 		var branches []Branch
-		lines := strings.Split(string(output), "\n")
+		localBranchMap := make(map[string]bool)
+
+		// Parse local branches
+		lines := strings.Split(string(outputLocal), "\n")
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
 
-			branch := Branch{}
+			branch := Branch{IsRemote: false}
 			if strings.HasPrefix(line, "*") {
 				branch.IsCurrent = true
 				line = strings.TrimPrefix(line, "* ")
@@ -1270,6 +1275,7 @@ func (m model) loadBranches() tea.Cmd {
 			parts := strings.Fields(line)
 			if len(parts) > 0 {
 				branch.Name = parts[0]
+				localBranchMap[branch.Name] = true
 			}
 			if len(parts) > 2 {
 				branch.Upstream = parts[2]
@@ -1290,6 +1296,37 @@ func (m model) loadBranches() tea.Cmd {
 			}
 
 			branches = append(branches, branch)
+		}
+
+		// Load remote branches
+		cmdRemote := exec.Command("git", "branch", "-r")
+		cmdRemote.Dir = m.repoPath
+		outputRemote, err := cmdRemote.Output()
+		if err == nil {
+			remoteLines := strings.Split(string(outputRemote), "\n")
+			for _, line := range remoteLines {
+				line = strings.TrimSpace(line)
+				if line == "" || strings.Contains(line, "->") {
+					// Skip empty lines and symbolic refs like origin/HEAD -> origin/main
+					continue
+				}
+
+				// Extract branch name (e.g., "origin/feature-branch")
+				branchName := line
+
+				// Check if we already have a local branch tracking this remote
+				localName := strings.TrimPrefix(branchName, "origin/")
+				if localBranchMap[localName] {
+					// Skip if there's already a local branch with the same name
+					continue
+				}
+
+				branch := Branch{
+					Name:     branchName,
+					IsRemote: true,
+				}
+				branches = append(branches, branch)
+			}
 		}
 
 		return branchesMsg(branches)
@@ -2575,7 +2612,30 @@ func (m model) validateCommitMessage(message string) bool {
 
 func (m model) switchBranch(branchName string) tea.Cmd {
 	return func() tea.Msg {
-		output, err := executeGitCommand(m.repoPath, "checkout", branchName)
+		var output []byte
+		var err error
+		var localBranchName string
+
+		// Check if this is a remote branch
+		if strings.HasPrefix(branchName, "origin/") || strings.HasPrefix(branchName, "remotes/origin/") {
+			// Extract the local branch name
+			localBranchName = strings.TrimPrefix(branchName, "remotes/origin/")
+			localBranchName = strings.TrimPrefix(localBranchName, "origin/")
+
+			// Create a local tracking branch from the remote branch
+			output, err = executeGitCommand(m.repoPath, "checkout", "-b", localBranchName, branchName)
+			if err != nil {
+				// If the branch already exists locally, just switch to it
+				if strings.Contains(string(output), "already exists") {
+					output, err = executeGitCommand(m.repoPath, "checkout", localBranchName)
+				}
+			}
+		} else {
+			// Regular local branch checkout
+			localBranchName = branchName
+			output, err = executeGitCommand(m.repoPath, "checkout", branchName)
+		}
+
 		if err != nil {
 			return statusMsg{message: fmt.Sprintf("❌ Failed to switch branch: %v - %s", err, string(output))}
 		}
@@ -2584,7 +2644,7 @@ func (m model) switchBranch(branchName string) tea.Cmd {
 			m.loadBranches(),
 			m.loadGitStatus(),
 			func() tea.Msg {
-				return statusMsg{message: fmt.Sprintf("✅ Switched to branch '%s'", branchName)}
+				return statusMsg{message: fmt.Sprintf("✅ Switched to branch '%s'", localBranchName)}
 			},
 		)()
 	}
@@ -3007,6 +3067,12 @@ func (m *model) updateBranchesTable() {
 			current = "✓ "
 		}
 
+		// Add remote indicator
+		branchName := branch.Name
+		if branch.IsRemote {
+			branchName = "📡 " + branch.Name
+		}
+
 		status := ""
 		if branch.Ahead > 0 && branch.Behind > 0 {
 			status = fmt.Sprintf("↑%d ↓%d", branch.Ahead, branch.Behind)
@@ -3017,7 +3083,7 @@ func (m *model) updateBranchesTable() {
 		}
 
 		row := table.Row{
-			current + branch.Name,
+			current + branchName,
 			status,
 			branch.Upstream,
 		}
@@ -3683,7 +3749,7 @@ func (m model) renderFooter() string {
 		} else if m.branchComparison != nil {
 			help = formatHelp("esc=back to branches", "1-4=tabs", "q=quit")
 		} else {
-			help = formatHelp("enter=switch", "n=new", "d=delete", "c=compare", "r=refresh", "1-4=tabs", "q=quit")
+			help = formatHelp("enter=switch (📡=remote)", "n=new", "d=delete", "c=compare", "r=refresh", "1-4=tabs", "q=quit")
 		}
 	case "tools":
 		switch m.toolMode {

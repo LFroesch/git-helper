@@ -76,14 +76,16 @@ The app analyzes your changes and detects:
 Complete branch management with comparison tools
 
 **Features:**
-- View all branches with current indicator
+- View all branches (local and remote) with current indicator
 - See ahead/behind counts for each branch
 - Compare current branch with main/master
 - Create, switch, delete branches
+- Switch to remote branches (creates local tracking branch)
+- Remote branches marked with 📡 icon
 - Safe delete with confirmations
 
 **Shortcuts:**
-- `Enter` - Switch to selected branch
+- `Enter` - Switch to selected branch (local or remote)
 - `n` - Create new branch
 - `d` - Delete branch (with confirmation)
 - `c` - Compare with main/master
