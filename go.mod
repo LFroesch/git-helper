@@ -1,4 +1,4 @@
-module git-helper
+module github.com/LFroesch/git-helper
 
 go 1.23.3
 

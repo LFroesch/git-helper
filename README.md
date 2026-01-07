@@ -282,21 +282,13 @@ The intelligence engine analyzes your diffs and generates contextual commit mess
 
 ## 📦 Installation
 
-### Build & Install Globally
-
 ```bash
-# Clone or download
-cd git-helper
+go install github.com/LFroesch/git-helper@latest
+```
 
-# Build
-go build -o git-helper .
-
-# Install to local bin
-cp git-helper ~/.local/bin/
-
-# Add to PATH (if not already)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
+```bash
+export PATH="$HOME/go/bin:$PATH"
 ```
 
 ### Usage
