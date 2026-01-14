@@ -1,7 +1,13 @@
 ## Last Prio
 more github flow actions / stash / clone / init / and beyond
+fix ahead/behind tracking?
+refactor into internal
 
 ## DevLog
+
+### 2026-01-13 - Renamed to Gitty
+- Renamed project from git-helper to gitty (shorter CLI name)
+- Updated go.mod module path and README references
 
 ### 2026-01-13 - Fixed Input Handling & Added Post-Commit Summary
 

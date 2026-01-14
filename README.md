@@ -1,4 +1,4 @@
-# 🚀 Git Helper
+# 🚀 Gitty
 
 A comprehensive, beautifully designed terminal UI for mastering your daily git workflow with smart commit suggestions and powerful advanced features.
 
@@ -151,7 +151,7 @@ Push/pull with detailed output:
 ### Quick Commit & Push
 ```
 1. Make code changes
-2. Run git-helper
+2. Run gitty
 3. Press 'a' to stage all (or Space on individual files)
 4. Press '2' to see smart suggestions
 5. Press '1' to commit with first suggestion (or type custom)
@@ -199,7 +199,7 @@ Push/pull with detailed output:
 ### Resolve Merge Conflicts
 ```
 1. Merge causes conflicts
-2. git-helper auto-detects, shows Conflicts view
+2. gitty auto-detects, shows Conflicts view
 3. Navigate files with ↑/↓
 4. Press 'o' (ours), 't' (theirs), or 'b' (both)
 5. Repeat for all conflicts
@@ -283,7 +283,7 @@ The intelligence engine analyzes your diffs and generates contextual commit mess
 ## 📦 Installation
 
 ```bash
-go install github.com/LFroesch/git-helper@latest
+go install github.com/LFroesch/gitty@latest
 ```
 
 Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
@@ -295,7 +295,7 @@ export PATH="$HOME/go/bin:$PATH"
 
 Run from any git repository:
 ```bash
-git-helper
+gitty
 ```
 
 ---
