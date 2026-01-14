@@ -1,7 +1,7 @@
 build:
-	go build -o git-helper main.go
+	go build -o gitty main.go
 
 cp:
-	cp git-helper ~/.local/bin/
+	cp gitty ~/.local/bin/
 	
 install: build cp
