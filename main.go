@@ -119,9 +119,10 @@ type model struct {
 	rebaseCommits    []RebaseCommit
 
 	// UI content
-	diffContent   string
-	pushOutput    string
-	recentCommits []Commit // Last 3 for commit tab
+	diffContent    string
+	pushOutput     string
+	recentCommits  []Commit // Last 3 for commit tab
+	commitSummary  *commitSuccessMsg
 
 	// Tables
 	filesTable      table.Model
@@ -171,6 +172,12 @@ type rebaseCommitsMsg []RebaseCommit
 type pushOutputMsg struct {
 	output string
 	commit string
+}
+type commitSuccessMsg struct {
+	hash    string
+	message string
+	diff    string
+	files   []string
 }
 
 // ============================================================================
@@ -599,6 +606,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = "✅ Pushed successfully"
 		m.statusExpiry = time.Now().Add(3 * time.Second)
 		return m, nil
+
+	case commitSuccessMsg:
+		summary := msg
+		m.commitSummary = &summary
+		m.statusMsg = fmt.Sprintf("✅ Committed: %s", msg.hash)
+		m.statusExpiry = time.Now().Add(3 * time.Second)
+		return m, tea.Batch(
+			m.loadGitStatus(),
+			m.loadGitChanges(),
+			m.loadRecentCommits(),
+		)
 	}
 
 	// Update appropriate component based on state
@@ -854,6 +872,23 @@ func (m model) handleConflictKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // ============================================================================
 
 func (m model) handleCommitKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// If showing commit summary, handle summary actions
+	if m.commitSummary != nil {
+		switch msg.String() {
+		case "p":
+			// Push to remote and clear summary
+			m.commitSummary = nil
+			m.selectedSuggestion = 0
+			return m, m.gitPush()
+		case "c":
+			// Clear summary and continue working
+			m.commitSummary = nil
+			m.selectedSuggestion = 0
+			return m, nil
+		}
+		return m, nil
+	}
+
 	// If input is focused, handle text input
 	if m.commitInput.Focused() {
 		if msg.String() == "enter" {
@@ -868,7 +903,10 @@ func (m model) handleCommitKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				)
 			}
 		}
-		return m, nil
+		// Pass all other keys to the input for handling
+		var cmd tea.Cmd
+		m.commitInput, cmd = m.commitInput.Update(msg)
+		return m, cmd
 	}
 
 	// Arrow keys to select suggestion
@@ -934,7 +972,10 @@ func (m model) handleBranchesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.createBranch(branchName)
 			}
 		}
-		return m, nil
+		// Pass all other keys to the input for handling
+		var cmd tea.Cmd
+		m.branchInput, cmd = m.branchInput.Update(msg)
+		return m, cmd
 	}
 
 	// If in comparison mode, pass keys to comparison table for navigation
@@ -1191,7 +1232,10 @@ func (m model) handleRebaseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		return m, nil
+		// Pass all other keys to the input for handling
+		var cmd tea.Cmd
+		m.rebaseInput, cmd = m.rebaseInput.Update(msg)
+		return m, cmd
 	}
 
 	// If commits are loaded, handle rebase actions
@@ -2652,23 +2696,43 @@ func (m model) gitReset() tea.Cmd {
 
 func (m model) commitWithMessage(message string) tea.Cmd {
 	return func() tea.Msg {
-		statusCmd := exec.Command("git", "diff", "--cached", "--name-only")
-		statusCmd.Dir = m.repoPath
-		statusOutput, err := statusCmd.Output()
+		// Get list of staged files before commit
+		filesCmd := exec.Command("git", "diff", "--cached", "--name-only")
+		filesCmd.Dir = m.repoPath
+		filesOutput, err := filesCmd.Output()
 		if err != nil {
 			return statusMsg{message: fmt.Sprintf("❌ Failed to check staged changes: %v", err)}
 		}
 
-		if len(strings.TrimSpace(string(statusOutput))) == 0 {
+		if len(strings.TrimSpace(string(filesOutput))) == 0 {
 			return statusMsg{message: "❌ No staged changes to commit. Stage files first."}
 		}
 
+		files := strings.Split(strings.TrimSpace(string(filesOutput)), "\n")
+
+		// Get diff before commit
+		diffCmd := exec.Command("git", "diff", "--cached")
+		diffCmd.Dir = m.repoPath
+		diffOutput, _ := diffCmd.Output()
+
+		// Perform commit
 		_, err = executeGitCommand(m.repoPath, "commit", "-m", message)
 		if err != nil {
 			return statusMsg{message: "❌ Commit failed - check commit message format"}
 		}
 
-		return statusMsg{message: fmt.Sprintf("✅ Committed: %s", message)}
+		// Get commit hash
+		hashCmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+		hashCmd.Dir = m.repoPath
+		hashOutput, _ := hashCmd.Output()
+		hash := strings.TrimSpace(string(hashOutput))
+
+		return commitSuccessMsg{
+			hash:    hash,
+			message: message,
+			diff:    string(diffOutput),
+			files:   files,
+		}
 	}
 }
 
@@ -3698,6 +3762,11 @@ func (m model) renderDiffView() string {
 }
 
 func (m model) renderCommitTab() string {
+	// Show commit summary if available
+	if m.commitSummary != nil {
+		return m.renderCommitSummary()
+	}
+
 	// Header
 	header := lipgloss.NewStyle().
 		Bold(true).
@@ -3764,6 +3833,75 @@ func (m model) renderCommitTab() string {
 		recentCommitsSection,
 		suggestionsSection,
 		customSection,
+	)
+}
+
+func (m model) renderCommitSummary() string {
+	summary := m.commitSummary
+
+	// Header
+	header := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("82")).
+		Render(fmt.Sprintf("✅ Commit Successful - %s", summary.hash))
+
+	// Commit message
+	messageSection := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86")).
+		Render("\nCommit Message:")
+	messageSection += "\n" + lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")).
+		Render(summary.message)
+
+	// Files changed
+	filesSection := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86")).
+		Render(fmt.Sprintf("\n\nFiles Changed (%d):", len(summary.files)))
+	for _, file := range summary.files {
+		filesSection += "\n  " + lipgloss.NewStyle().
+			Foreground(lipgloss.Color("39")).
+			Render("• " + file)
+	}
+
+	// Diff
+	diffSection := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86")).
+		Render("\n\nChanges:")
+
+	// Truncate diff if too long
+	diffPreview := summary.diff
+	maxLines := 20
+	lines := strings.Split(diffPreview, "\n")
+	if len(lines) > maxLines {
+		diffPreview = strings.Join(lines[:maxLines], "\n") + "\n... (diff truncated)"
+	}
+
+	diffBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1).
+		Render(colorizeGitDiff(diffPreview))
+
+	// Actions
+	actionsSection := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("208")).
+		Render("\n\nNext Actions:")
+	actionsSection += "\n" + lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("  [p] Push to remote\n  [c] Continue working (clear summary)\n  [1] Go to workspace")
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		messageSection,
+		filesSection,
+		diffSection,
+		diffBox,
+		actionsSection,
 	)
 }
 
@@ -3957,7 +4095,9 @@ func (m model) renderFooter() string {
 			help = formatHelp("space=stage/unstage", "a=add all", "r=refresh", "v=toggle diff", "d=view diff", "R=reset", "1-4=tabs", "q=quit")
 		}
 	case "commit":
-		if m.commitInput.Focused() {
+		if m.commitSummary != nil {
+			help = formatHelp("p=push", "c=continue", "1-4=tabs", "q=quit")
+		} else if m.commitInput.Focused() {
 			help = formatHelp("enter=commit", "esc=cancel")
 		} else {
 			help = formatHelp("↑/↓=navigate", "enter/space=commit", "c=custom", "1-4=tabs", "q=quit")
