@@ -146,6 +146,7 @@ type model struct {
 	statusExpiry       time.Time
 	showDiffPreview    bool
 	selectedSuggestion int // 0 = custom, 1-9 = suggestions
+	scrollOffset       int // For scrolling content in current view
 
 	// System
 	repoPath         string
@@ -875,15 +876,25 @@ func (m model) handleCommitKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// If showing commit summary, handle summary actions
 	if m.commitSummary != nil {
 		switch msg.String() {
+		case "j", "down":
+			m.scrollOffset++
+			return m, nil
+		case "k", "up":
+			if m.scrollOffset > 0 {
+				m.scrollOffset--
+			}
+			return m, nil
 		case "p":
 			// Push to remote and clear summary
 			m.commitSummary = nil
 			m.selectedSuggestion = 0
+			m.scrollOffset = 0
 			return m, m.gitPush()
 		case "c":
 			// Clear summary and continue working
 			m.commitSummary = nil
 			m.selectedSuggestion = 0
+			m.scrollOffset = 0
 			return m, nil
 		}
 		return m, nil
@@ -3839,70 +3850,131 @@ func (m model) renderCommitTab() string {
 func (m model) renderCommitSummary() string {
 	summary := m.commitSummary
 
+	// Calculate available height (account for header, footer, borders, padding)
+	const uiOverhead = 8
+	availableHeight := m.height - uiOverhead
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	// Build all content lines
+	var allLines []string
+
 	// Header
-	header := lipgloss.NewStyle().
+	allLines = append(allLines, lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("82")).
-		Render(fmt.Sprintf("✅ Commit Successful - %s", summary.hash))
+		Render(fmt.Sprintf("✅ Commit Successful - %s", summary.hash)))
+	allLines = append(allLines, "")
 
 	// Commit message
-	messageSection := lipgloss.NewStyle().
+	allLines = append(allLines, lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("86")).
-		Render("\nCommit Message:")
-	messageSection += "\n" + lipgloss.NewStyle().
+		Render("Commit Message:"))
+	allLines = append(allLines, lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")).
-		Render(summary.message)
+		Render(summary.message))
+	allLines = append(allLines, "")
 
 	// Files changed
-	filesSection := lipgloss.NewStyle().
+	allLines = append(allLines, lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("86")).
-		Render(fmt.Sprintf("\n\nFiles Changed (%d):", len(summary.files)))
+		Render(fmt.Sprintf("Files Changed (%d):", len(summary.files))))
 	for _, file := range summary.files {
-		filesSection += "\n  " + lipgloss.NewStyle().
+		allLines = append(allLines, lipgloss.NewStyle().
 			Foreground(lipgloss.Color("39")).
-			Render("• " + file)
+			Render("  • "+file))
 	}
+	allLines = append(allLines, "")
 
 	// Diff
-	diffSection := lipgloss.NewStyle().
+	allLines = append(allLines, lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("86")).
-		Render("\n\nChanges:")
+		Render("Changes:"))
+	allLines = append(allLines, "")
 
-	// Truncate diff if too long
-	diffPreview := summary.diff
-	maxLines := 20
-	lines := strings.Split(diffPreview, "\n")
-	if len(lines) > maxLines {
-		diffPreview = strings.Join(lines[:maxLines], "\n") + "\n... (diff truncated)"
+	// Add colorized diff lines
+	diffLines := strings.Split(summary.diff, "\n")
+	for _, line := range diffLines {
+		allLines = append(allLines, colorizeGitDiff(line))
+	}
+	allLines = append(allLines, "")
+
+	// Actions
+	allLines = append(allLines, lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("208")).
+		Render("Next Actions:"))
+	allLines = append(allLines, lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("  [p] Push to remote"))
+	allLines = append(allLines, lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("  [c] Continue working"))
+	allLines = append(allLines, lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("  [1] Go to workspace"))
+	allLines = append(allLines, lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("  [j/k] Scroll"))
+
+	// Calculate scroll indicators
+	totalLines := len(allLines)
+	maxVisibleLines := availableHeight - 2 // Reserve for scroll indicators
+
+	if maxVisibleLines < 1 {
+		maxVisibleLines = 1
 	}
 
-	diffBox := lipgloss.NewStyle().
+	// Adjust scroll offset to stay within bounds
+	if m.scrollOffset > totalLines-maxVisibleLines {
+		m.scrollOffset = totalLines - maxVisibleLines
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+
+	// Determine if we need indicators
+	hasTopIndicator := m.scrollOffset > 0
+	hasBottomIndicator := m.scrollOffset+maxVisibleLines < totalLines
+
+	var displayLines []string
+
+	// Add top indicator
+	if hasTopIndicator {
+		displayLines = append(displayLines, lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Render("▲ scroll up for more..."))
+	}
+
+	// Add visible lines
+	startIdx := m.scrollOffset
+	endIdx := m.scrollOffset + maxVisibleLines
+	if endIdx > totalLines {
+		endIdx = totalLines
+	}
+	displayLines = append(displayLines, allLines[startIdx:endIdx]...)
+
+	// Add bottom indicator
+	if hasBottomIndicator {
+		displayLines = append(displayLines, lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Render("▼ scroll down for more..."))
+	}
+
+	// Wrap in box with fixed height
+	content := strings.Join(displayLines, "\n")
+	box := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(1).
-		Render(colorizeGitDiff(diffPreview))
+		Height(availableHeight).
+		Render(content)
 
-	// Actions
-	actionsSection := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("208")).
-		Render("\n\nNext Actions:")
-	actionsSection += "\n" + lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		Render("  [p] Push to remote\n  [c] Continue working (clear summary)\n  [1] Go to workspace")
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		messageSection,
-		filesSection,
-		diffSection,
-		diffBox,
-		actionsSection,
-	)
+	return box
 }
 
 func (m model) renderBranchesTab() string {
@@ -4096,7 +4168,7 @@ func (m model) renderFooter() string {
 		}
 	case "commit":
 		if m.commitSummary != nil {
-			help = formatHelp("p=push", "c=continue", "1-4=tabs", "q=quit")
+			help = formatHelp("j/k=scroll", "p=push", "c=continue", "1-4=tabs", "q=quit")
 		} else if m.commitInput.Focused() {
 			help = formatHelp("enter=commit", "esc=cancel")
 		} else {
